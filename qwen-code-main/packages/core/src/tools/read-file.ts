@@ -16,6 +16,7 @@ import type {
 } from './tools.js';
 import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
 import { ToolNames, ToolDisplayNames } from './tool-names.js';
+import { generateCodeOutline } from '../core/serena/outline.js';
 
 import type { PartListUnion } from '@google/genai';
 import type { PermissionDecision } from '../permissions/types.js';
@@ -75,6 +76,11 @@ export interface ReadFileToolParams {
    * Pages are 1-indexed. Open-ended ranges like "3-" are not supported.
    */
   pages?: string;
+
+  /**
+   * If true, returns a high-level structural code skeleton (classes, interfaces, types, functions, methods with line numbers) instead of the full file text.
+   */
+  outline?: boolean;
 }
 
 class ReadFileToolInvocation extends BaseToolInvocation<
@@ -97,6 +103,10 @@ class ReadFileToolInvocation extends BaseToolInvocation<
 
     if (this.params.pages) {
       return `${shortPath} (pages ${this.params.pages})`;
+    }
+
+    if (this.params.outline) {
+      return `${shortPath} (outline)`;
     }
 
     const { offset, limit } = this.params;
@@ -278,7 +288,9 @@ class ReadFileToolInvocation extends BaseToolInvocation<
     }
 
     let llmContent: PartListUnion;
-    if (
+    if (this.params.outline && typeof result.llmContent === 'string') {
+      llmContent = generateCodeOutline(result.llmContent, absPath);
+    } else if (
       result.isTruncated &&
       result.linesShown &&
       result.originalLineCount !== undefined
@@ -562,6 +574,11 @@ export class ReadFileTool extends BaseDeclarativeTool<
           pages: {
             description: `Optional: For PDF files, the page range to extract as text (e.g., '1-5', '3', '10-20'). Pages are 1-indexed. Max ${PDF_MAX_PAGES_PER_READ} pages per request. Open-ended ranges like '3-' are not supported. Use this for large PDFs or when the model does not support native PDF input.`,
             type: 'string',
+          },
+          outline: {
+            description:
+              'Optional: If true, returns a high-level structural code outline (classes, interfaces, types, functions, methods with line numbers) instead of the full file text. Highly recommended for large code files to understand structure before reading specific line ranges.',
+            type: 'boolean',
           },
         },
         required: ['file_path'],
