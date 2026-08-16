@@ -14,6 +14,8 @@ export interface ToolDetoxOptions {
   maxDynamicTools?: number;
   /** Minimum total tool count before pruning kicks in (default: 12) */
   minToolsThreshold?: number;
+  /** Include the find_tools meta-tool for agentic on-demand discovery (default: true) */
+  includeMetaTool?: boolean;
   /** Additional tool names that must always be retained */
   alwaysRetainTools?: string[];
 }
@@ -38,6 +40,65 @@ const CORE_TOOLS = new Set([
 ]);
 
 /**
+ * Meta-tool definition for dynamic on-demand tool discovery by the LLM.
+ */
+export const FIND_TOOLS_DECLARATION: FunctionDeclaration = {
+  name: 'find_tools',
+  description:
+    'Search for and discover additional available tools by capability or domain when a required specialized tool is not in the current active context.',
+  parametersJsonSchema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description:
+          'The capability, service name, or topic to search for (e.g. "database", "slack", "monitoring", "browser", "s3")',
+      },
+    },
+    required: ['query'],
+  },
+};
+
+/**
+ * Domain-specific semantic clusters for expanding search tokens.
+ */
+const SEMANTIC_DOMAIN_CLUSTERS: Array<Set<string>> = [
+  // Database / SQL / Storage
+  new Set([
+    'db', 'database', 'sql', 'query', 'postgres', 'postgresql', 'mysql', 'sqlite',
+    'table', 'schema', 'select', 'insert', 'update', 'orm', 'migration', 'redis', 'mongo',
+    'база', 'данных', 'таблица', 'запрос', 'бд',
+  ]),
+  // Monitoring / Logs / Errors / Crash
+  new Set([
+    'log', 'logs', 'error', 'errors', 'exception', 'crash', 'sentry', 'datadog',
+    'cloudwatch', 'trace', 'tracing', '500', '502', '504', 'status', 'health',
+    'пятисотит', 'упал', 'сбой', 'падают', 'логи', 'ошибки', 'мониторинг',
+  ]),
+  // Browser / Web Automation / Scraping / Screenshots
+  new Set([
+    'browser', 'web', 'page', 'url', 'screenshot', 'html', 'scrape', 'scraping',
+    'playwright', 'puppeteer', 'selenium', 'dom', 'click', 'navigate', 'capture',
+    'слепок', 'экран', 'скриншот', 'браузер', 'страница',
+  ]),
+  // Git / GitHub / Version Control / PRs / Issues
+  new Set([
+    'git', 'github', 'gitlab', 'pr', 'pull', 'issue', 'issues', 'commit',
+    'repo', 'repository', 'branch', 'merge', 'diff', 'коммит', 'пулл', 'ветка', 'репозиторий',
+  ]),
+  // Cloud / Infrastructure / DevOps / S3 / Deploy
+  new Set([
+    'cloud', 'aws', 's3', 'gcp', 'azure', 'k8s', 'kubernetes', 'docker',
+    'container', 'deploy', 'deployment', 'bucket', 'деплой', 'контейнер', 'кластер',
+  ]),
+  // Communication / Slack / Discord / Notifications
+  new Set([
+    'slack', 'discord', 'telegram', 'email', 'notify', 'notification',
+    'channel', 'message', 'уведомление', 'сообщение', 'чат', 'канал',
+  ]),
+];
+
+/**
  * Tokenizes text into normalized lowercase alphanumeric terms.
  */
 export function tokenizeText(text: string): Set<string> {
@@ -45,33 +106,51 @@ export function tokenizeText(text: string): Set<string> {
     return new Set();
   }
 
-  // Split on non-alphanumeric characters, underscores, and camelCase boundaries
   const words = text
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .toLowerCase()
-    .split(/[^a-z0-9_]+/)
-    .filter((w) => w.length > 2);
+    .split(/[^a-z0-9а-яё_]+/)
+    .filter((w) => w.length >= 2);
 
   return new Set(words);
 }
 
 /**
- * Scores a tool declaration against a set of query keywords.
+ * Expands query tokens using semantic domain clusters.
+ */
+export function expandSemanticTokens(queryTokens: Set<string>): Set<string> {
+  const expanded = new Set<string>(queryTokens);
+
+  for (const token of queryTokens) {
+    for (const cluster of SEMANTIC_DOMAIN_CLUSTERS) {
+      if (cluster.has(token)) {
+        for (const synonym of cluster) {
+          expanded.add(synonym);
+        }
+      }
+    }
+  }
+
+  return expanded;
+}
+
+/**
+ * Scores a tool declaration using Tier 1 (lexical match) + Tier 2 (semantic domain expansion).
  */
 export function scoreTool(
   tool: FunctionDeclaration,
-  queryTokens: Set<string>,
+  directQueryTokens: Set<string>,
+  expandedTokens: Set<string>,
   recentToolNames: Set<string>,
 ): number {
   let score = 0;
   const toolName = tool.name ?? '';
 
-  // Strong boost if tool was recently used in session
+  // Strong boost if tool was recently used in the active session
   if (recentToolNames.has(toolName)) {
-    score += 10;
+    score += 15;
   }
 
-  // Tokenize tool name, description, and parameter keys
   const nameTokens = tokenizeText(toolName);
   const descTokens = tokenizeText(tool.description ?? '');
 
@@ -83,15 +162,31 @@ export function scoreTool(
     }
   }
 
-  for (const token of queryTokens) {
+  // Tier 1: Direct exact keyword hits (Highest Weight)
+  for (const token of directQueryTokens) {
     if (nameTokens.has(token)) {
-      score += 5;
+      score += 10;
     }
     if (descTokens.has(token)) {
-      score += 2;
+      score += 5;
     }
     if (paramTokens.has(token)) {
-      score += 3;
+      score += 6;
+    }
+  }
+
+  // Tier 2: Semantic Domain synonym hits
+  for (const token of expandedTokens) {
+    if (!directQueryTokens.has(token)) {
+      if (nameTokens.has(token)) {
+        score += 4;
+      }
+      if (descTokens.has(token)) {
+        score += 2;
+      }
+      if (paramTokens.has(token)) {
+        score += 3;
+      }
     }
   }
 
@@ -125,7 +220,7 @@ export function extractRecentToolCalls(history?: Content[], maxTurns: number = 3
 }
 
 /**
- * Filters and prunes tool declarations dynamically based on user query and session relevance.
+ * Filters and prunes tool declarations dynamically using a 3-tier cascaded approach.
  */
 export function filterRelevantTools(
   declarations: FunctionDeclaration[],
@@ -136,10 +231,11 @@ export function filterRelevantTools(
   const {
     maxDynamicTools = 8,
     minToolsThreshold = 12,
+    includeMetaTool = true,
     alwaysRetainTools = [],
   } = options;
 
-  // If total tools count is below threshold, pass all through without pruning
+  // If total tools count is below threshold, pass all through
   if (declarations.length <= minToolsThreshold) {
     return declarations;
   }
@@ -157,7 +253,7 @@ export function filterRelevantTools(
     }
   }
 
-  // Tokenize user query + last user turn in history
+  // Combine query and recent user input
   let combinedQuery = userQuery;
   if (history && history.length > 0) {
     const lastUserTurn = [...history].reverse().find((h) => h.role === 'user');
@@ -169,20 +265,28 @@ export function filterRelevantTools(
     }
   }
 
-  const queryTokens = tokenizeText(combinedQuery);
+  const directQueryTokens = tokenizeText(combinedQuery);
+  const expandedTokens = expandSemanticTokens(directQueryTokens);
   const recentTools = extractRecentToolCalls(history);
 
   // Score and rank dynamic tools
   const scoredDynamic = dynamicDeclarations.map((decl) => ({
     decl,
-    score: scoreTool(decl, queryTokens, recentTools),
+    score: scoreTool(decl, directQueryTokens, expandedTokens, recentTools),
   }));
 
   // Sort descending by score
   scoredDynamic.sort((a, b) => b.score - a.score);
 
-  // Take top N dynamic tools
+  // Select top N dynamic tools
   const topDynamic = scoredDynamic.slice(0, maxDynamicTools).map((item) => item.decl);
 
-  return [...coreDeclarations, ...topDynamic];
+  const result = [...coreDeclarations, ...topDynamic];
+
+  // Tier 3: Add find_tools meta-tool if enabled
+  if (includeMetaTool && !result.some((t) => t.name === 'find_tools')) {
+    result.push(FIND_TOOLS_DECLARATION);
+  }
+
+  return result;
 }
