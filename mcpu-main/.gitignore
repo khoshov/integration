@@ -1,0 +1,10 @@
+node_modules
+*.log
+.temp
+.tmp
+_w
+dist*
+.fynpo
+*.tgz
+coverage
+.local

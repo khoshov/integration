@@ -1,0 +1,13 @@
+{
+  "changeLogMarkers": [
+    "## Packages",
+    "## Commits"
+  ],
+  "command": {
+    "publish": {
+      "tags": {},
+      "versionTagging": {},
+      "gitTagTemplate": "mcpu-rel-{YYYY}{MM}{DD}-{COMMIT}"
+    }
+  }
+}
