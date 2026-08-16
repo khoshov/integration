@@ -9,10 +9,11 @@
 | Оптимизация | Ветка Git | Область действия | Описание механизма | Примерная экономия |
 | :--- | :--- | :--- | :--- | :--- |
 | **RTK** *(Rust Token Killer)* | `feat/rtk-integration` | Shell Commands Output | Автоматический рерайтинг и фильтрация вывода утилит (`git`, `docker`, `npm`, `cargo`, `ls`, `grep`) через предсобранный бинарник | **60% – 90%** на выводе команд |
+| **Tool Detox** | `feat/tool-detox` | Dynamic Tool Selection | Динамический отбор релевантных MCP-инструментов по ключевым словам запроса + история + защита инструментов ядра | **10,000 – 30,000 токенов** на запрос |
 | **MCPU** *(MCP Unified)* | `feat/mcpu-integration` | MCP Tool Schemas | Рекурсивная очистка JSON Schema параметров инструментов от мета-шума (`$schema`, `title`, `additionalProperties: false`, union-типы) | **50% – 80%** на схемах инструментов |
 | **Headroom** | `feat/headroom-integration` | Context History & KV-Cache | Схлопывание повторяющихся строк логов, стектрейсов, Live Zone Protection (защита последних $N$ ходов) + Cache Aligner | **50% – 75%** на истории + **до 90%** скидка на чтение кэша |
 | **Caveman** | `feat/caveman-integration` | Model Output & Descriptions | Системный промпт Caveman Full (ответы без воды), семантическое сжатие описаний MCP (с сохранением `must`/`required`) + TOON JSON | **50% – 65%** на ответах модели, **50% – 70%** на JSON |
-| **All-in-One** | `feat/all-integrations` | Весь пайплайн LLM | Синергетическое объединение всех 4 оптимизаций в едином билде | **Комплексное снижение расхода токенов в 3–5 раз** |
+| **All-in-One** | `feat/all-integrations` | Весь пайплайн LLM | Синергетическое объединение всех 5 оптимизаций в едином билде | **Комплексное снижение расхода токенов в 3–5 раз** |
 
 ---
 
@@ -31,7 +32,20 @@
 
 ---
 
-### 2. MCPU (MCP Unified Schema Compression)
+### 2. Tool Detox (Dynamic Relevance-Based Tool Pruning)
+* **Ветка:** `feat/tool-detox`
+* **Область:** Фильтрация списка инструментов перед запросом к LLM.
+* **Примерная экономия:** **10 000 – 30 000 входных токенов** на каждом шаге диалога.
+* **Какую проблему решает:** Когда у пользователя подключено 3–5 MCP-серверов, общее число инструментов достигает 50–100 штук. Передавать схемы всех инструментов (например, GitHub, Slack, S3, Docker, Playwright, Postgres) при каждом простом запросе вроде *"запусти тесты"* — колоссальная трата токенов.
+* **Как устроено внутри:**
+  1. **Core Tools Protection:** Инструменты ядра (`shell`, `read_file`, `write_file`, `edit`, `grep`, `glob`, `ask_user_question`, `agent`, `skill`) защищены и передаются всегда.
+  2. **Lexical Scoring (BM25/TF-IDF):** Модуль `packages/core/src/core/tool-detox/tool-detox.ts` токенизирует текущий запрос пользователя и сопоставляет с именами, описаниями и параметрами динамических MCP-инструментов.
+  3. **Active Session Retention:** Инструменты, вызванные в предыдущих 2–3 ходах диалога, получают приоритетный буст и не выпадают из контекста.
+  4. **Threshold Gate:** Если общее число инструментов $\le 12$, фильтрация не включается. При превышении порога в запрос отбираются только Core Tools + топ-8 релевантных MCP-инструментов.
+
+---
+
+### 3. MCPU (MCP Unified Schema Compression)
 * **Ветка:** `feat/mcpu-integration`
 * **Область:** Описания параметров инструментов MCP (JSON Schema).
 * **Примерная экономия:** **50% – 80% токенов** на определениях всех инструментов.
@@ -46,7 +60,7 @@
 
 ---
 
-### 3. Headroom (Context Crusher & Cache Aligner)
+### 4. Headroom (Context Crusher & Cache Aligner)
 * **Ветка:** `feat/headroom-integration`
 * **Область:** История сообщений диалога (Context History) и попадание в KV-кэш провайдера.
 * **Примерная экономия:** **50% – 75% токенов** на старых ходах + **до 90% скидка** на чтение кэша.
@@ -61,7 +75,7 @@
 
 ---
 
-### 4. Caveman (Full Brevity, Semantic Descriptions & TOON JSON)
+### 5. Caveman (Full Brevity, Semantic Descriptions & TOON JSON)
 * **Ветка:** `feat/caveman-integration`
 * **Область:** Исходящие ответы модели (Output) + Описания MCP инструментов + Табличный JSON.
 * **Примерная экономия:** **50% – 65% токенов** на ответах модели, **50% – 70%** на JSON-массивах.
@@ -84,14 +98,15 @@
 
 ---
 
-### 5. Объединённая супер-сборка (`feat/all-integrations`)
+### 6. Объединённая супер-сборка (`feat/all-integrations`)
 * **Ветка:** `feat/all-integrations`
-* Все 4 механизма работают одновременно в рамках единого сквозного конвейера:
+* Все 5 механизмов работают одновременно в рамках единого сквозного конвейера:
   1. **System Prompt & Cache Aligner (Headroom + Caveman)** ➔ Стабилизация и максимальный KV-Cache Hit.
-  2. **MCP Tool Registry (MCPU Schema + Caveman Description)** ➔ Сжатие определений инструментов на 75%.
-  3. **Shell Execution (RTK Rewrite)** ➔ Сжатие вывода команд на 80%.
-  4. **Context History (Headroom Crusher + Live Zone)** ➔ Сжатие старой истории на 60%.
-  5. **LLM Generation (Caveman Full Mode)** ➔ Сжатие исходящих ответов на 60%.
+  2. **Tool Detox (Dynamic Pruner)** ➔ Отсечение нерелевантных инструментов (минус 10k–30k токенов).
+  3. **MCP Tool Registry (MCPU Schema + Caveman Description)** ➔ Сжатие определений оставшихся инструментов на 75%.
+  4. **Shell Execution (RTK Rewrite)** ➔ Сжатие вывода команд на 80%.
+  5. **Context History (Headroom Crusher + Live Zone)** ➔ Сжатие старой истории на 60%.
+  6. **LLM Generation (Caveman Full Mode)** ➔ Сжатие исходящих ответов на 60%.
 
 ---
 
@@ -105,6 +120,9 @@ git checkout main
 
 # Только оптимизация shell-команд (RTK)
 git checkout feat/rtk-integration
+
+# Только динамический отбор инструментов (Tool Detox)
+git checkout feat/tool-detox
 
 # Только сжатие схем MCP-инструментов (MCPU)
 git checkout feat/mcpu-integration
