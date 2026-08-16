@@ -33,6 +33,7 @@ import { GoogleCredentialProvider } from '../mcp/google-auth-provider.js';
 import { ServiceAccountImpersonationProvider } from '../mcp/sa-impersonation-provider.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
 import type { McpToolAnnotations } from './mcp-tool.js';
+import { compressToolDescription } from '../core/caveman/description-compressor.js';
 import { SdkControlClientTransport } from './sdk-control-client-transport.js';
 import { MCPServerStatus, updateMCPServerStatus } from './mcp-status.js';
 export {
@@ -1404,7 +1405,7 @@ export async function discoverTools(
             mcpCallableTool,
             mcpServerName,
             funcDecl.name!,
-            funcDecl.description ?? '',
+            compressToolDescription(funcDecl.description ?? ''),
             funcDecl.parametersJsonSchema ?? { type: 'object', properties: {} },
             applyConfigFilters ? mcpServerConfig.trust : undefined,
             undefined,
