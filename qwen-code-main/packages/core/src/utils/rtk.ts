@@ -26,7 +26,7 @@ function getPlatformFolder(): string | null {
 }
 
 /**
- * Locate the RTK executable path offline.
+ * Locate the RTK executable path.
  */
 export function getRtkExecutablePath(): string | null {
   if (cachedRtkPath !== undefined) {
@@ -41,19 +41,24 @@ export function getRtkExecutablePath(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const coreDir = path.dirname(currentFile);
-    // Relative from packages/core/src/utils/ or dist/
+    // Relative from packages/core/src/utils/, packages/core/dist/, packages/cli/dist/, etc.
     candidatePaths.push(
-      path.resolve(coreDir, '../../../../cli/bin', binaryName),
+      path.resolve(coreDir, '../../cli/bin', binaryName),
       path.resolve(coreDir, '../../../cli/bin', binaryName),
-      path.resolve(coreDir, '../../bin', binaryName),
+      path.resolve(coreDir, '../../packages/cli/bin', binaryName),
+      path.resolve(coreDir, '../../../packages/cli/bin', binaryName),
       path.resolve(coreDir, '../bin', binaryName),
+      path.resolve(coreDir, '../../bin', binaryName),
     );
 
     const platformFolder = getPlatformFolder();
     if (platformFolder) {
       candidatePaths.push(
-        path.resolve(coreDir, '../../../../cli/bin/vendor', platformFolder, binaryName),
+        path.resolve(coreDir, '../../cli/bin/vendor', platformFolder, binaryName),
         path.resolve(coreDir, '../../../cli/bin/vendor', platformFolder, binaryName),
+        path.resolve(coreDir, '../../packages/cli/bin/vendor', platformFolder, binaryName),
+        path.resolve(coreDir, '../../../packages/cli/bin/vendor', platformFolder, binaryName),
+        path.resolve(coreDir, '../bin/vendor', platformFolder, binaryName),
         path.resolve(coreDir, '../../bin/vendor', platformFolder, binaryName),
       );
     }
@@ -150,7 +155,7 @@ export function rewriteCommandWithRtk(command: string): string {
     const output = execFileSync(rtkPath, ['rewrite', command], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 200,
+      timeout: 1000,
     }).trim();
 
     if (output && (output.startsWith('rtk ') || output.startsWith('rtk.exe '))) {

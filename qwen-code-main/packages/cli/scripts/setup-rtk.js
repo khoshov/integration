@@ -25,10 +25,9 @@ function getPlatformFolder() {
   return null;
 }
 
-export function setupOfflineRtk() {
+export function setupRtk() {
   const platformFolder = getPlatformFolder();
   if (!platformFolder) {
-    console.warn(`[RTK] Unsupported platform (${process.platform}-${process.arch}) for pre-bundled RTK.`);
     return;
   }
 
@@ -39,7 +38,6 @@ export function setupOfflineRtk() {
   const destBinary = path.join(binDir, binaryName);
 
   if (!fs.existsSync(srcBinary)) {
-    console.warn(`[RTK] Vendor binary not found at ${srcBinary}.`);
     return;
   }
 
@@ -49,13 +47,12 @@ export function setupOfflineRtk() {
     if (process.platform !== 'win32') {
       fs.chmodSync(destBinary, 0o755);
     }
-    console.log(`[RTK] Successfully installed offline RTK binary to ${destBinary}`);
   } catch (err) {
-    console.warn(`[RTK] Failed to set up offline RTK binary:`, err);
+    console.warn(`[RTK] Failed to configure RTK binary:`, err);
   }
 }
 
 // Run if executed directly
 if (process.argv[1] === __filename) {
-  setupOfflineRtk();
+  setupRtk();
 }

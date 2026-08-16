@@ -24,8 +24,8 @@
     }
   },
   "scripts": {
-    "postinstall": "node scripts/setup-rtk-offline.js",
-    "build": "node ../../scripts/build_package.js && node scripts/setup-rtk-offline.js",
+    "postinstall": "node scripts/setup-rtk.js",
+    "build": "node ../../scripts/build_package.js && node scripts/setup-rtk.js",
     "start": "node dist/index.js",
     "debug": "node --inspect-brk dist/index.js",
     "lint": "eslint . --ext .ts,.tsx",
@@ -38,7 +38,7 @@
   "files": [
     "dist",
     "bin",
-    "scripts/setup-rtk-offline.js"
+    "scripts/setup-rtk.js"
   ],
   "config": {
     "sandboxImageUri": "ghcr.io/qwenlm/qwen-code:0.21.11"

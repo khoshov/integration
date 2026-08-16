@@ -18,7 +18,7 @@ describe('RTK integration utils', () => {
     _resetRtkCache();
   });
 
-  it('locates the offline bundled RTK executable', () => {
+  it('locates the bundled RTK executable', () => {
     const rtkPath = getRtkExecutablePath();
     expect(rtkPath).not.toBeNull();
     expect(typeof rtkPath).toBe('string');
