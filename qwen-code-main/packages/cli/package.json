@@ -10,7 +10,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "qwen": "dist/index.js"
+    "qwen": "dist/index.js",
+    "rtk": "bin/rtk"
   },
   "exports": {
     ".": {
@@ -23,7 +24,8 @@
     }
   },
   "scripts": {
-    "build": "node ../../scripts/build_package.js",
+    "postinstall": "node scripts/setup-rtk-offline.js",
+    "build": "node ../../scripts/build_package.js && node scripts/setup-rtk-offline.js",
     "start": "node dist/index.js",
     "debug": "node --inspect-brk dist/index.js",
     "lint": "eslint . --ext .ts,.tsx",
@@ -34,7 +36,9 @@
     "check-i18n": "tsx ../../scripts/check-i18n.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin",
+    "scripts/setup-rtk-offline.js"
   ],
   "config": {
     "sandboxImageUri": "ghcr.io/qwenlm/qwen-code:0.21.11"

@@ -5,6 +5,7 @@
  */
 
 import { PRIVATE_ACP_CAPABILITY_ENV } from './invocation-context.js';
+import { augmentEnvWithRtk } from './rtk.js';
 
 /**
  * Env vars that carry Qwen-internal credentials or private parent
@@ -42,9 +43,10 @@ export const INTERNAL_SECRET_ENV_VARS: readonly string[] = [
 export function sanitizeChildEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-  const sanitized: NodeJS.ProcessEnv = { ...env };
+  const sanitized: NodeJS.ProcessEnv = augmentEnvWithRtk({ ...env });
   for (const key of INTERNAL_SECRET_ENV_VARS) {
     delete sanitized[key];
   }
   return sanitized;
 }
+

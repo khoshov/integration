@@ -86,6 +86,7 @@ import {
   type ReadTextFileResponse,
 } from '../services/fileSystemService.js';
 import { createPatchSmart, getDiffStat } from './diffOptions.js';
+import { rewriteCommandWithRtk } from '../utils/rtk.js';
 
 const debugLogger = createDebugLogger('SHELL');
 const DEFAULT_SHELL_OUTPUT_THRESHOLD = 30_000;
@@ -2297,7 +2298,7 @@ export class ShellToolInvocation extends BaseToolInvocation<
     const processedCommand = this.addAttributionToPR(
       this.addCoAuthorToGitCommit(this.params.command.trim()),
     );
-    const commandToExecute = processedCommand;
+    const commandToExecute = rewriteCommandWithRtk(processedCommand);
     const cwd = this.params.directory || this.config.getTargetDir();
 
     // Snapshot HEAD before running so attachCommitAttribution can detect
@@ -3656,9 +3657,10 @@ export class ShellToolInvocation extends BaseToolInvocation<
     });
 
     const startTime = Date.now();
+    const commandToExecute = rewriteCommandWithRtk(processedCommand);
     const registration: ShellTaskRegistration = {
       shellId,
-      command: processedCommand,
+      command: commandToExecute,
       cwd,
       status: 'running',
       startTime,
@@ -3667,7 +3669,7 @@ export class ShellToolInvocation extends BaseToolInvocation<
     };
 
     const { result: resultPromise, pid } = await ShellExecutionService.execute(
-      processedCommand,
+      commandToExecute,
       cwd,
       (event: ShellOutputEvent) => {
         if (event.type === 'data' && typeof event.chunk === 'string') {
